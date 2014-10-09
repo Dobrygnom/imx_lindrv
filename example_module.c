@@ -58,7 +58,7 @@ module_exit(exit_routine);
 
 int usrbtn1_irq_num;
 volatile int usrled_val = 0;
-struct interrupt_context int_context;
+struct interrupt_context *int_context = NULL;
 
 struct interrupt_context
 {
@@ -110,8 +110,15 @@ static int __init init_routine(void)
     int result = 0, i;
 	void *ccm = NULL;
 	void *tzic = NULL;
-	int_context.counter = 0;
-	int_context.Q = 30;
+	
+	int_context = kmalloc(sizeof(struct interrupt_context),GFP_KERNEL);
+	if(int_context == NULL)
+	{
+		printk(KERN_INFO "fuck\n");
+		return -1;
+	}
+	int_context->counter = 0;
+	int_context->Q = 30;
 
     printk( KERN_INFO "%s: initialization.\n", MODULE_NAME);
 
@@ -191,7 +198,7 @@ static int __init init_routine(void)
 	printk( KERN_INFO "epit_cr = %x\n", ioread32(&epit->cr));
 	
 // IRQ
-	if( 0 != request_irq(40, epit1_irq_handler, 0, MODULE_NAME, &int_context))
+	if( 0 != request_irq(40, epit1_irq_handler, 0, MODULE_NAME, int_context))
 	{
 		printk(KERN_INFO "request_irq failed\n");
 		return -EBUSY;	
@@ -219,12 +226,14 @@ static void __exit exit_routine(void)
 {
 	printk(KERN_INFO "cnt = 0x%x\n", ioread32(&epit->cntr));
     free_irq(usrbtn1_irq_num, NULL);
-	free_irq(40, NULL);
+	free_irq(40, int_context);
 	iowrite32(ioread32(&epit->cr) & 0xFC100000, &epit->cr);
 	iounmap(epit);
 	release_mem_region(EPIT1_BASE, sizeof(struct epit_reg));
     gpio_free( GPIO_USRLED );
     gpio_set_value(GPIO_USRLED, 1);
+	kfree(int_context);
+	int_context = NULL;
     printk( KERN_INFO "%s: stopped.\n", MODULE_NAME);
 }
 
