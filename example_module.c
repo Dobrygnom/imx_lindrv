@@ -58,7 +58,7 @@ module_exit(exit_routine);
 
 int usrbtn1_irq_num;
 volatile int usrled_val = 0;
-struct interrupt_context *int_context = NULL;
+struct interrupt_context int_context;
 
 struct interrupt_context
 {
@@ -87,14 +87,7 @@ static irqreturn_t usrbtn1_irq_handler( int irq, void *dev_id )
 
 static irqreturn_t epit1_irq_handler( int irq, void *dev_id)
 {
-	/*struct interrupt_context *context = (struct interrupt_context*)dev_id;
-	if(context->counter == 0)
-	{
-		usrled_val = 1 & ~usrled_val;
-	    gpio_set_value(GPIO_USRLED, usrled_val);
-		
-	}
-
+	struct interrupt_context *context = (struct interrupt_context*)dev_id;
 	if(context->counter == 0)
 	{
 		usrled_val = 1 & ~usrled_val;
@@ -106,7 +99,7 @@ static irqreturn_t epit1_irq_handler( int irq, void *dev_id)
 	    gpio_set_value(GPIO_USRLED, usrled_val);
 	}
 
-	if(++(context->counter) >= CLOCK_RESOLUTION)	context->counter = 0;*/
+	if(++(context->counter) >= CLOCK_RESOLUTION)	context->counter = 0;
 
 	iowrite32(ioread32(&epit->sr) | EPIT1_EPITSR_OCIF, &epit->sr);
 	return (IRQ_HANDLED);
@@ -117,14 +110,8 @@ static int __init init_routine(void)
     int result = 0, i;
 	void *ccm = NULL;
 	void *tzic = NULL;
-	/*int_context = kmalloc(sizeof(struct interrupt_context), GFP_KERNEL);
-	if(int_context == NULL)
-	{
-		printk(KERN_INFO "kalloc failed");
-		return -1;
-	}	
-	int_context->counter = 0;
-	int_context->Q = 30;*/
+	int_context.counter = 0;
+	int_context.Q = 30;
 
     printk( KERN_INFO "%s: initialization.\n", MODULE_NAME);
 
@@ -204,7 +191,7 @@ static int __init init_routine(void)
 	printk( KERN_INFO "epit_cr = %x\n", ioread32(&epit->cr));
 	
 // IRQ
-	if( 0 != request_irq(40, epit1_irq_handler, 0, MODULE_NAME, NULL))
+	if( 0 != request_irq(40, epit1_irq_handler, 0, MODULE_NAME, &int_context))
 	{
 		printk(KERN_INFO "request_irq failed\n");
 		return -EBUSY;	
@@ -238,8 +225,6 @@ static void __exit exit_routine(void)
 	release_mem_region(EPIT1_BASE, sizeof(struct epit_reg));
     gpio_free( GPIO_USRLED );
     gpio_set_value(GPIO_USRLED, 1);
-	//kfree(int_context);
-	int_context = NULL;
     printk( KERN_INFO "%s: stopped.\n", MODULE_NAME);
 }
 
