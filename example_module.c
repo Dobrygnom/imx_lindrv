@@ -6,6 +6,7 @@
 #include "utils.h"
 #include <linux/delay.h>
 #include <linux/slab.h>
+#include <linux/spinlock.h>
 
 #define CLOCK_RESOLUTION	100
 #define Q_STEP				10
@@ -66,6 +67,7 @@ struct interrupt_context *int_context = NULL;
 
 struct interrupt_context
 {
+	spinlock_t lock;
 	int counter;
 	int Q;
 };
@@ -85,34 +87,33 @@ static struct epit_reg *epit;
 static irqreturn_t usrbtn1_irq_handler( int irq, void *dev_id )
 {
 	struct interrupt_context *context = (struct interrupt_context*)dev_id;	
-	if(context->Q > Q_MAX)
-	{
+	spin_lock_irq(&context->lock);
+	if(context->Q >= Q_MAX) {
 		context->Q = Q_MAX;
-	}
-	else
-	{
+	} else {
 		context->Q += Q_STEP;    
 	}
+	spin_unlock_irq(&context->lock);
 	return( IRQ_HANDLED );
 }
 
 static irqreturn_t usrbtn2_irq_handler( int irq, void *dev_id )
 {
 	struct interrupt_context *context = (struct interrupt_context*)dev_id;	
-	if(context->Q < Q_MIN)
-	{	
+	spin_lock_irq(&context->lock);
+	if(context->Q <= Q_MIN){	
 		context->Q = Q_MIN;
-	}
-	else
-	{
+	} else {
 		context->Q -= Q_STEP;
 	}
+	spin_unlock_irq(&context->lock);
     return( IRQ_HANDLED );
 }
 
 static irqreturn_t epit1_irq_handler( int irq, void *dev_id)
 {
 	struct interrupt_context *context = (struct interrupt_context*)dev_id;
+	spin_lock_irq(&context->lock);
 	if(context->counter == 0)
 	{
 		usrled_val = 1 & ~usrled_val;
@@ -127,6 +128,7 @@ static irqreturn_t epit1_irq_handler( int irq, void *dev_id)
 	if(++(context->counter) >= CLOCK_RESOLUTION)	context->counter = 0;
 
 	iowrite32(ioread32(&epit->sr) | EPIT1_EPITSR_OCIF, &epit->sr);
+	spin_unlock_irq(&context->lock);
 	return (IRQ_HANDLED);
 }
 
@@ -142,6 +144,7 @@ static int __init init_routine(void)
 		printk(KERN_INFO "fuck\n");
 		return -1;
 	}
+	spin_lock_init(&int_context->lock);
 	int_context->counter = 0;
 	int_context->Q = 30;
 
