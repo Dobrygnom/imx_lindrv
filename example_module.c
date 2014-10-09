@@ -8,6 +8,9 @@
 #include <linux/slab.h>
 
 #define CLOCK_RESOLUTION	100
+#define Q_STEP				10
+#define Q_MIN				10
+#define Q_MAX				90
 
 #define GPIO_USRLED  199
 #define GPIO_USRBTN1 46
@@ -57,6 +60,7 @@ module_init(init_routine);
 module_exit(exit_routine);
 
 int usrbtn1_irq_num;
+int usrbtn2_irq_num;
 volatile int usrled_val = 0;
 struct interrupt_context *int_context = NULL;
 
@@ -80,8 +84,29 @@ static struct epit_reg *epit;
 
 static irqreturn_t usrbtn1_irq_handler( int irq, void *dev_id )
 {
-    //usrled_val = 1 & ~usrled_val;
-    //gpio_set_value(GPIO_USRLED, usrled_val);
+	struct interrupt_context *context = (struct interrupt_context*)dev_id;	
+	if(context->Q > Q_MAX)
+	{
+		context->Q = Q_MAX;
+	}
+	else
+	{
+		context->Q += Q_STEP;    
+	}
+	return( IRQ_HANDLED );
+}
+
+static irqreturn_t usrbtn2_irq_handler( int irq, void *dev_id )
+{
+	struct interrupt_context *context = (struct interrupt_context*)dev_id;	
+	if(context->Q < Q_MIN)
+	{	
+		context->Q = Q_MIN;
+	}
+	else
+	{
+		context->Q -= Q_STEP;
+	}
     return( IRQ_HANDLED );
 }
 
@@ -138,9 +163,23 @@ static int __init init_routine(void)
     result = gpio_direction_input( GPIO_USRBTN1 );
     __ERROR_RETURN(result, "GPIO_USRBTN1 gpio_direction_input");
     usrbtn1_irq_num = gpio_to_irq( GPIO_USRBTN1 );
-    result = request_irq( usrbtn1_irq_num, usrbtn1_irq_handler, IRQF_TRIGGER_FALLING, MODULE_NAME, NULL );
+    result = request_irq( usrbtn1_irq_num, usrbtn1_irq_handler, IRQF_DISABLED | IRQF_TRIGGER_FALLING, MODULE_NAME, int_context );
     __ERROR_RETURN(result, "GPIO_USRBTN1 request_irq");
     gpio_free( GPIO_USRBTN1 );
+
+	result = -1 + gpio_is_valid( GPIO_USRBTN2 );
+    __ERROR_RETURN(result, "GPIO_USRBTN2 gpio_is_valid");
+    gpio_free( GPIO_USRBTN2 );
+    result = gpio_request( GPIO_USRBTN2, MODULE_NAME );
+    __ERROR_RETURN(result, "GPIO_USRBTN2 gpio_request" );
+    result = gpio_direction_input( GPIO_USRBTN2 );
+    __ERROR_RETURN(result, "GPIO_USRBTN2 gpio_direction_input");
+    usrbtn2_irq_num = gpio_to_irq( GPIO_USRBTN2 );
+    result = request_irq( usrbtn2_irq_num, usrbtn2_irq_handler, IRQF_DISABLED | IRQF_TRIGGER_FALLING, MODULE_NAME, int_context );
+    __ERROR_RETURN(result, "GPIO_USRBTN2 request_irq");
+    gpio_free( GPIO_USRBTN2 );
+
+
 // Geather info
 
 	tzic = ioremap(TZIC_WAKEUP0, 4 * sizeof(unsigned int));
@@ -192,13 +231,13 @@ static int __init init_routine(void)
 		return -1;
 	}
 	iowrite32(ioread32(&epit->cr) & 0xFC100000, &epit->cr);
-	iowrite32(0x38E / CLOCK_RESOLUTION, &epit->lr);
+	iowrite32(0x38E * 2 / CLOCK_RESOLUTION, &epit->lr);
 	iowrite32(0x0, &epit->cmpr);
 	iowrite32(EPIT1_EPITCR_32KHZ | EPIT1_EPITCR_IOVW | EPIT1_EPITCR_PRESCALER | EPIT1_EPITCR_OCIEN | EPIT1_EPITCR_RLD | EPIT1_EPITCR_ENMOD | EPIT1_EPITCR_WAITEN, &epit->cr);
 	printk( KERN_INFO "epit_cr = %x\n", ioread32(&epit->cr));
 	
 // IRQ
-	if( 0 != request_irq(40, epit1_irq_handler, 0, MODULE_NAME, int_context))
+	if( 0 != request_irq(40, epit1_irq_handler, IRQF_DISABLED, MODULE_NAME, int_context))
 	{
 		printk(KERN_INFO "request_irq failed\n");
 		return -EBUSY;	
@@ -225,7 +264,8 @@ static int __init init_routine(void)
 static void __exit exit_routine(void)
 {
 	printk(KERN_INFO "cnt = 0x%x\n", ioread32(&epit->cntr));
-    free_irq(usrbtn1_irq_num, NULL);
+    free_irq(usrbtn1_irq_num, int_context);
+	free_irq(usrbtn2_irq_num, int_context);
 	free_irq(40, int_context);
 	iowrite32(ioread32(&epit->cr) & 0xFC100000, &epit->cr);
 	iounmap(epit);
