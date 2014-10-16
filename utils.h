@@ -17,6 +17,6 @@
 #define TRACE_W(__x__, ...)     TRACE(_WARN(__x__,  ##__VA_ARGS__))
 #define TRACE_S(__x__, ...)     TRACE(_SUCC(__x__,  ##__VA_ARGS__))
 
-#define TRACE(format...)        kmalloc(KERN_INFO ##format);
+#define TRACE(format...)        printk(KERN_INFO format);
 
 #endif /* _UTILS_H */

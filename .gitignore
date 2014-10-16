@@ -3,3 +3,4 @@
 *.o*
 *.ko*
 *.cmd
+.tmp_versions
