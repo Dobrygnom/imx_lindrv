@@ -173,6 +173,7 @@ static void __exit exit_routine(void)
 static irqreturn_t wdog_irq_handler(int irq, void *dev_id)
 {
     //struct interrupt_context *context = (struct interrupt_context*)dev_id;
+    TRACE_N("danunahuy");
     iowrite16(0x5555, &wdog->wsr);
     iowrite16(0xAAAA, &wdog->wsr);
     iowrite16(ioread16(&wdog->wicr) | (0 << 14), &wdog->wicr);
