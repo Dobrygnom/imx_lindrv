@@ -111,10 +111,10 @@ static int __init init_routine(void)
             goto init_failed_btn1;
     }
 
-    iowrite16(ioread16(&wdog->wcr) | (0x03 << 8) | (1 << 3) | (1 << 2), &wdog->wcr);
+    iowrite16(ioread16(&wdog->wcr) | (0x14 << 8) | (1 << 3) | (1 << 2), &wdog->wcr);
     iowrite16(0x5555, &wdog->wsr);
     iowrite16(0xAAAA, &wdog->wsr);
-    iowrite16(ioread16(&wdog->wicr) | (1 << 15) | (0 << 14) | 0x04, &wdog->wicr);
+    iowrite16(ioread16(&wdog->wicr) | (1 << 15) | (0 << 14) | 0x01, &wdog->wicr);
     //iowrite16(ioread16(&wdog->wicr) | (1 << 14), &wdog->wicr);
     
     
@@ -157,11 +157,6 @@ static void __exit exit_routine(void)
     gpio_free(GPIO_USRBTN1);
     
     // disable wdog and free requested memory
-    iowrite16(0x0030, &wdog->wcr);
-    iowrite16(0x0000, &wdog->wsr);
-    iowrite16(0x0000, &wdog->wrsr);
-    iowrite16(0x0004, &wdog->wicr);
-    iowrite16(0x0001, &wdog->wmcr);
     iounmap(wdog);
     release_mem_region(WDOG_BASE, sizeof(struct wdog_registers));    
     
@@ -174,9 +169,9 @@ static irqreturn_t wdog_irq_handler(int irq, void *dev_id)
 {
     //struct interrupt_context *context = (struct interrupt_context*)dev_id;
     TRACE_N("danunahuy");
+    iowrite16(ioread16(&wdog->wicr) | (1 << 14), &wdog->wicr);
     iowrite16(0x5555, &wdog->wsr);
-    iowrite16(0xAAAA, &wdog->wsr);
-    iowrite16(ioread16(&wdog->wicr) | (0 << 14), &wdog->wicr);
+    iowrite16(0xAAAA, &wdog->wsr);    
     return(IRQ_HANDLED);
 }
 
